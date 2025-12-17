@@ -2,13 +2,19 @@ const express = require("express");
 const app = express();
 const cors = require("cors");
 const { MongoClient, ServerApiVersion } = require('mongodb');
+const { default: verifyFirebaseToken } = require("./middlewares/verifyFirebaseToken");
 
 const PORT = process.env.PORT || 3000;
 
 require('dotenv').config();
 
 //middlewares
-app.use(cors());
+app.use(cors({
+  origin: [
+    'http://localhost:5173',
+    ],
+  credentials: true
+}));
 app.use(express.json());
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.kpqz2hg.mongodb.net/?appName=Cluster0`;
@@ -24,15 +30,31 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-    // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
 
+    const db = client.db('book_courier_dB');
+    usersCollection = db.collection('users');
+    booksCollection = db.collection('books');
+    ordersCollection = db.collection('orders');
 
-    // Send a ping to confirm a successful connection
+//user api
+   app.get('/users', verifyFirebaseToken, async (req, res) => {
+  const users = await usersCollection.find().toArray();
+  res.json(users);
+});
+
+    app.post('/users', async (req, res) => {
+  const user = req.body;
+  const existing = await usersCollection.findOne({ email: user.email });
+  if (existing) return res.json({ message: 'User already exists' });
+  const result = await usersCollection.insertOne(user);
+  res.json(result);
+});
+
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
-    // Ensures that the client will close when you finish/error
+
     await client.close();
   }
 }
