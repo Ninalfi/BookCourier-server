@@ -1,7 +1,7 @@
 const express = require("express");
 const app = express();
 const cors = require("cors");
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 //const verifyFirebaseToken  = require("./middlewares/verifyFirebaseToken");
 
 const PORT = process.env.PORT || 3000;
@@ -61,25 +61,45 @@ app.post('/users', async (req, res) => {
   const users = await usersCollection.find().toArray();
   res.json(users);
 });
+app.get('/users/:email', async (req, res) => {
+  const email = req.params.email;
+  try {
+    const user = await usersCollection.findOne({ email });
+    if (!user) return res.status(404).json({ message: "User not found" });
+    res.json(user);
+  } catch (err) {
+    console.error("Error fetching user:", err);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
 
 
 //Add book
 app.post('/books',  async (req, res) => {
-  const book = { ...req.body, createdAt: new Date() };
+  const book = { ...req.body, price: Number(req.body.price), createdAt: new Date() };
   const result = await booksCollection.insertOne(book);
   res.json(result);
 });
 
-// Get all books
+// All books
 app.get('/books', async (req, res) => {
-  const { search, sort } = req.query;
-  let query = { status: 'published' };
+  const { page = 1, limit = 20, search, sort } = req.query;
+
+  let query = {}; 
   if (search) query.title = { $regex: search, $options: 'i' };
+
   let cursor = booksCollection.find(query);
+
   if (sort === 'asc') cursor.sort({ price: 1 });
   if (sort === 'desc') cursor.sort({ price: -1 });
-  res.json(await cursor.toArray());
+
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+  cursor = cursor.skip(skip).limit(parseInt(limit));
+
+  const books = await cursor.toArray();
+  res.json(books);
 });
+
 
 // Get book by ID
 app.get('/books/:id', async (req, res) => {
@@ -105,6 +125,7 @@ app.post('/wishlist',  async (req, res) => {
 // Get wishlist
 app.get('/wishlist', async (req, res) => {
   const email = req.user.email;
+   if (!email) return res.status(400).json({ error: 'Email is required' });
   const result = await wishlistCollection.find({ email }).toArray();
   res.json(result);
 });
