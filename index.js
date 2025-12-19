@@ -109,6 +109,11 @@ app.get('/wishlist', async (req, res) => {
   res.json(result);
 });
 
+// Remove from wishlist
+app.delete('/wishlist/:id', async (req, res) => {
+  const result = await wishlistCollection.deleteOne({ _id: new ObjectId(req.params.id) });
+  res.json(result);
+});
 
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
