@@ -115,6 +115,17 @@ app.delete('/wishlist/:id', async (req, res) => {
   res.json(result);
 });
 
+app.post('/reviews',  async (req, res) => {
+  const review = { ...req.body, createdAt: new Date() };
+  const result = await reviewsCollection.insertOne(review);
+  res.json(result);
+});
+
+app.get('/reviews/:bookId', async (req, res) => {
+  const result = await reviewsCollection.find({ bookId: req.params.bookId }).toArray();
+  res.json(result);
+});
+
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   }
