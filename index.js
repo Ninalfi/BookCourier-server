@@ -81,6 +81,21 @@ app.get('/books', async (req, res) => {
   res.json(await cursor.toArray());
 });
 
+// Get book by ID
+app.get('/books/:id', async (req, res) => {
+  const book = await booksCollection.findOne({ _id: new ObjectId(req.params.id) });
+  res.json(book);
+});
+
+// Update book
+app.patch('/books/:id', verifyFirebaseToken, async (req, res) => {
+  const result = await booksCollection.updateOne(
+    { _id: new ObjectId(req.params.id) },
+    { $set: req.body }
+  );
+  res.json(result);
+});
+
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   }
