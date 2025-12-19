@@ -88,13 +88,27 @@ app.get('/books/:id', async (req, res) => {
 });
 
 // Update book
-app.patch('/books/:id', verifyFirebaseToken, async (req, res) => {
+app.patch('/books/:id', async (req, res) => {
   const result = await booksCollection.updateOne(
     { _id: new ObjectId(req.params.id) },
     { $set: req.body }
   );
   res.json(result);
 });
+
+// Add to wishlist
+app.post('/wishlist',  async (req, res) => {
+  const result = await wishlistCollection.insertOne(req.body);
+  res.json(result);
+});
+
+// Get wishlist
+app.get('/wishlist', async (req, res) => {
+  const email = req.user.email;
+  const result = await wishlistCollection.find({ email }).toArray();
+  res.json(result);
+});
+
 
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
