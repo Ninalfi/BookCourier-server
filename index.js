@@ -2,11 +2,12 @@ const express = require("express");
 const app = express();
 const cors = require("cors");
 const { MongoClient, ServerApiVersion } = require('mongodb');
-const { default: verifyFirebaseToken } = require("./middlewares/verifyFirebaseToken");
+//const verifyFirebaseToken  = require("./middlewares/verifyFirebaseToken");
 
 const PORT = process.env.PORT || 3000;
 
 require('dotenv').config();
+
 
 //middlewares
 app.use(cors({
@@ -28,6 +29,13 @@ const client = new MongoClient(uri, {
   }
 });
 
+let usersCollection;
+let booksCollection;
+let ordersCollection;
+let wishlistCollection;
+let reviewsCollection;
+let paymentsCollection;
+
 async function run() {
   try {
     await client.connect();
@@ -36,26 +44,48 @@ async function run() {
     usersCollection = db.collection('users');
     booksCollection = db.collection('books');
     ordersCollection = db.collection('orders');
+    wishlistCollection = db.collection('wishlist');
+    reviewsCollection = db.collection('reviews');
+    paymentsCollection = db.collection('payments');
 
 //user api
-   app.get('/users', verifyFirebaseToken, async (req, res) => {
-  const users = await usersCollection.find().toArray();
-  res.json(users);
-});
 
-    app.post('/users', async (req, res) => {
+app.post('/users', async (req, res) => {
   const user = req.body;
   const existing = await usersCollection.findOne({ email: user.email });
   if (existing) return res.json({ message: 'User already exists' });
   const result = await usersCollection.insertOne(user);
   res.json(result);
 });
+   app.get('/users', async (req, res) => {
+  const users = await usersCollection.find().toArray();
+  res.json(users);
+});
+
+
+//Add book
+app.post('/books',  async (req, res) => {
+  const book = { ...req.body, createdAt: new Date() };
+  const result = await booksCollection.insertOne(book);
+  res.json(result);
+});
+
+// Get all books
+app.get('/books', async (req, res) => {
+  const { search, sort } = req.query;
+  let query = { status: 'published' };
+  if (search) query.title = { $regex: search, $options: 'i' };
+  let cursor = booksCollection.find(query);
+  if (sort === 'asc') cursor.sort({ price: 1 });
+  if (sort === 'desc') cursor.sort({ price: -1 });
+  res.json(await cursor.toArray());
+});
 
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
-  } finally {
+  }
+   finally {
 
-    await client.close();
   }
 }
 run().catch(console.dir);
