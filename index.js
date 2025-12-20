@@ -73,6 +73,15 @@ app.get('/users/:email', async (req, res) => {
   }
 });
 
+app.patch('/users/role/:id', verifyFirebaseToken, verifyAdmin, async (req, res) => {
+  const { role } = req.body; 
+  const result = await usersCollection.updateOne(
+    { _id: new ObjectId(req.params.id) },
+    { $set: { role } }
+  );
+  res.json(result);
+});
+
 
 //Add book
 app.post('/books',  async (req, res) => {
