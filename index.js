@@ -57,7 +57,7 @@ app.post('/users', async (req, res) => {
   const result = await usersCollection.insertOne(user);
   res.json(result);
 });
-   app.get('/users', async (req, res) => {
+   app.get('/users',verifyAdmin, async (req, res) => {
   const users = await usersCollection.find().toArray();
   res.json(users);
 });
@@ -73,24 +73,27 @@ app.get('/users/:email', async (req, res) => {
   }
 });
 
-app.patch('/users/role/:id', verifyFirebaseToken, verifyAdmin, async (req, res) => {
+app.patch('/users/role/:id', verifyAdmin, async (req, res) => {
   const { role } = req.body; 
   const result = await usersCollection.updateOne(
     { _id: new ObjectId(req.params.id) },
     { $set: { role } }
   );
-  res.json(result);
+  res.json({
+     success: true,
+    message: `User role updated to ${role}`,
+    result
+  });
 });
 
 
 //Add book
-app.post('/books',  async (req, res) => {
+app.post('/books',verifyLibrarian,  async (req, res) => {
   const book = { ...req.body, price: Number(req.body.price), createdAt: new Date() };
   const result = await booksCollection.insertOne(book);
   res.json(result);
 });
 
-// All books
 app.get('/books', async (req, res) => {
   const { page = 1, limit = 20, search, sort } = req.query;
 
@@ -109,15 +112,12 @@ app.get('/books', async (req, res) => {
   res.json(books);
 });
 
-
-// Get book by ID
 app.get('/books/:id', async (req, res) => {
   const book = await booksCollection.findOne({ _id: new ObjectId(req.params.id) });
   res.json(book);
 });
 
-// Update book
-app.patch('/books/:id', async (req, res) => {
+app.patch('/books/:id',verifyLibrarian, async (req, res) => {
   const result = await booksCollection.updateOne(
     { _id: new ObjectId(req.params.id) },
     { $set: req.body }
@@ -125,13 +125,41 @@ app.patch('/books/:id', async (req, res) => {
   res.json(result);
 });
 
+app.delete('/books/:id',verifyAdmin,  async (req, res) => {
+  const id = req.params.id;
+  await ordersCollection.deleteMany({ bookId: id });
+  const result = await booksCollection.deleteOne({ _id: new ObjectId(id) });
+  res.json(result);
+});
+
+//orders api
+app.post('/orders', async (req, res) => {
+  const order = { ...req.body, status: 'pending', paymentStatus: 'unpaid', orderDate: new Date() };
+  const result = await ordersCollection.insertOne(order);
+  res.json(result);
+});
+
+app.get('/orders', async (req, res) => {
+  const email = req.user.email;
+  const result = await ordersCollection.find({ email }).toArray();
+  res.json(result);
+});
+
+app.patch('/orders/:id', async (req, res) => {
+  const result = await ordersCollection.updateOne(
+    { _id: new ObjectId(req.params.id) },
+    { $set: req.body }
+  );
+  res.json(result);
+});
+
+
 // Add to wishlist
 app.post('/wishlist',  async (req, res) => {
   const result = await wishlistCollection.insertOne(req.body);
   res.json(result);
 });
 
-// Get wishlist
 app.get('/wishlist', async (req, res) => {
   const email = req.user.email;
    if (!email) return res.status(400).json({ error: 'Email is required' });
@@ -139,14 +167,13 @@ app.get('/wishlist', async (req, res) => {
   res.json(result);
 });
 
-// Remove from wishlist
 app.delete('/wishlist/:id', async (req, res) => {
   const result = await wishlistCollection.deleteOne({ _id: new ObjectId(req.params.id) });
   res.json(result);
 });
 
 app.post('/reviews',  async (req, res) => {
-  const review = { ...req.body, createdAt: new Date() };
+  const review = { ...req.body,email: req.user.email, createdAt: new Date() };
   const result = await reviewsCollection.insertOne(review);
   res.json(result);
 });
@@ -155,6 +182,9 @@ app.get('/reviews/:bookId', async (req, res) => {
   const result = await reviewsCollection.find({ bookId: req.params.bookId }).toArray();
   res.json(result);
 });
+
+//payments api
+
 
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
