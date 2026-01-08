@@ -1,7 +1,7 @@
 const verifyLibrarian = async (req, res, next) => {
-  const user = await usersCollection.findOne({ email: req.user.email });
-  if (!["admin", "librarian"].includes(user?.role)) {
-    return res.status(403).json({ message: "Librarian access required" });
+  const role = req.dbUser?.role;
+  if (role !== "librarian" && role !== "admin") {
+    return res.status(403).json({ message: "Forbidden: librarian/admin only" });
   }
   next();
 };
