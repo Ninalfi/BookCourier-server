@@ -21,22 +21,24 @@ app.use(express.json());
 
 
 const verifyFirebaseToken = async (req, res, next) => {
-  //console.log("AUTH HEADER:", req.headers.authorization);
+  console.log("AUTH HEADER:", req.headers.authorization);
 
   try {
     const authHeader = req.headers.authorization || "";
     const token = authHeader.startsWith("Bearer ")
       ? authHeader.split(" ")[1]
       : null;
-
+      
     if (!token) {
+      console.log("❌ NO TOKEN");
       return res.status(401).json({ message: "Unauthorized: no token" });
     }
     const decoded = await admin.auth().verifyIdToken(token);
+    console.log("✅ TOKEN VERIFIED:", decoded.email);
     req.user = decoded;
     next();
   } catch (error) {
-    //console.error("verifyFirebaseToken error:", error.message);
+    console.log("verifyFirebaseToken error:", error.message);
     return res.status(401).json({ message: "Unauthorized: invalid token" });
   }
 };
@@ -108,21 +110,6 @@ async function run() {
      await usersCollection.createIndex({ email: 1 }, { unique: true });
     await wishlistCollection.createIndex({ email: 1, bookId: 1 }, { unique: true });
 
-app.get("/me", verifyFirebaseToken, async (req, res) => {
-  try {
-    const email = req.user.email;
-    const user = await usersCollection.findOne(
-      { email },
-      { projection: { role: 1, email: 1, name: 1, displayName: 1 } }
-    );
-
-    if (!user) return res.status(404).json({ message: "User not found" });
-    res.json(user);
-  } catch (err) {
-    console.error("GET /me error:", err);
-    res.status(500).json({ message: "Internal server error" });
-  }
-});
 
 //user api
 
@@ -165,6 +152,21 @@ app.post("/users", verifyFirebaseToken, async (req, res) => {
   } catch (err) {
     console.error("POST /users error:", err);
     res.status(500).json({ success: false, message: err?.message || "Internal server error" });
+  }
+});
+
+app.get("/users/me", verifyFirebaseToken, async (req, res) => {
+  try {
+    const email = req.user.email;
+    const user = await usersCollection.findOne(
+      { email },
+      { projection: { role: 1, email: 1, name: 1, displayName: 1 } }
+    );
+    if (!user) return res.status(404).json({ message: "User not found" });
+    res.json(user);
+  } catch (err) {
+    console.error("GET /me error:", err);
+    res.status(500).json({ message: "Internal server error" });
   }
 });
 
