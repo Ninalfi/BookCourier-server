@@ -13,28 +13,43 @@ const crypto = require('crypto');
 app.use(cors({
   origin: [
     'http://localhost:5173',
+    'https://book-courier-9e429.web.app'
     ],
   credentials: true
 }));
 
 app.use(express.json());
+//app.options("*", cors());
+
+
+// try {
+//   const serviceAccount = JSON.parse(Buffer.from(process.env.FB_SERVICE_KEY, "base64").toString("utf8"));
+
+//   admin.initializeApp({
+//     credential: admin.credential.cert(serviceAccount),
+//   });
+
+//   console.log("Firebase Admin initialized");
+// } catch (err) {
+//   console.error("Firebase init failed", err);
+// }
 
 
 const verifyFirebaseToken = async (req, res, next) => {
-  console.log("AUTH HEADER:", req.headers.authorization);
+  //console.log("AUTH HEADER:", req.headers.authorization);
 
   try {
     const authHeader = req.headers.authorization || "";
     const token = authHeader.startsWith("Bearer ")
       ? authHeader.split(" ")[1]
       : null;
-      
+
     if (!token) {
-      console.log("❌ NO TOKEN");
+      //console.log("❌ NO TOKEN");
       return res.status(401).json({ message: "Unauthorized: no token" });
     }
     const decoded = await admin.auth().verifyIdToken(token);
-    console.log("✅ TOKEN VERIFIED:", decoded.email);
+    //console.log("✅ TOKEN VERIFIED:", decoded.email);
     req.user = decoded;
     next();
   } catch (error) {
@@ -456,6 +471,12 @@ app.patch(
   }
 );
 
+app.get("/orders", verifyFirebaseToken, verifyAdmin, async (req, res) => {
+  const orders = await ordersCollection.find().toArray();
+  res.json(orders);
+});
+
+
 
 // Add to wishlist
 app.post("/wishlist", verifyFirebaseToken, async (req, res) => {
@@ -695,10 +716,8 @@ app.get("/payments/my", verifyFirebaseToken, async (req, res) => {
 
   res.json({ success: true, payments });
 });
-
-
-    await client.db("admin").command({ ping: 1 });
-    console.log("Pinged your deployment. You successfully connected to MongoDB!");
+    // await client.db("admin").command({ ping: 1 });
+    // console.log("Pinged your deployment. You successfully connected to MongoDB!");
   }
    finally {
 
@@ -710,6 +729,8 @@ app.get("/", (req, res) =>{
     res.send("BookCourier API Running")
 });
 
-app.listen(PORT, () =>{
-     console.log(`Server running on port ${PORT}`)
-    });
+// app.listen(PORT, () =>{
+//      console.log(`Server running on port ${PORT}`)
+//     });
+
+module.exports = app;
