@@ -547,41 +547,115 @@ app.get("/api/public/categories", async (req, res) => {
 });
 
 app.get("/api/public/about-stats", async (req, res) => {
-  const [totalBooks, totalUsers, totalOrders, deliveredOrders] = await Promise.all([
-    booksCollection.countDocuments({}),
-    usersCollection.countDocuments({}),
-    ordersCollection.countDocuments({}),
-    ordersCollection.countDocuments({ status: "delivered" }),
-  ]);
+  try {
+    if (!booksCollection || !usersCollection || !ordersCollection) {
+      return res.status(503).json({ message: "DB not ready" });
+    }
 
-  const deliveryRate =
-    totalOrders > 0 ? Number(((deliveredOrders / totalOrders) * 100).toFixed(1)) : 0;
+    const [totalBooks, totalUsers, totalOrders, deliveredOrders] =
+      await Promise.all([
+        booksCollection.countDocuments({}),
+        usersCollection.countDocuments({}),
+        ordersCollection.countDocuments({}),
+        ordersCollection.countDocuments({ orderStatus: "delivered" }), // ✅ FIXED
+      ]);
 
-  const topCategories = await booksCollection.aggregate([
-    { $match: { category: { $exists: true, $ne: "" } } },
-    { $group: { _id: "$category", count: { $sum: 1 } } },
-    { $sort: { count: -1 } },
-    { $limit: 6 },
-    { $project: { _id: 0, name: "$_id", count: 1 } }
-  ]).toArray();
+    const deliveryRate =
+      totalOrders > 0
+        ? Number(((deliveredOrders / totalOrders) * 100).toFixed(1))
+        : 0;
 
-  const ratingAgg = await booksCollection.aggregate([
-    { $addFields: { r: { $ifNull: ["$rating", "$ratingAvg"] } } },
-    { $match: { r: { $type: "number" } } },
-    { $group: { _id: null, avgRating: { $avg: "$r" } } }
-  ]).toArray();
+    const topCategories = await booksCollection
+      .aggregate([
+        { $match: { category: { $exists: true, $ne: "" } } },
+        { $group: { _id: "$category", count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+        { $limit: 6 },
+        { $project: { _id: 0, name: "$_id", count: 1 } },
+      ])
+      .toArray();
 
-  const avgRating = Number((ratingAgg?.[0]?.avgRating || 0).toFixed(2));
+    res.json({
+      totalBooks,
+      totalUsers,
+      totalOrders,
+      deliveredOrders,
+      deliveryRate,
+      avgRating: 0,
+      topCategories,
+    });
+  } catch (err) {
+    console.error("GET /api/public/about-stats error:", err);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
 
-  res.json({
-    totalBooks,
-    totalUsers,
-    totalOrders,
-    deliveredOrders,
-    deliveryRate,
-    avgRating,
-    topCategories,
-  });
+
+app.get("/api/public/categories", async (req, res) => {
+  try {
+    if (!booksCollection) {
+      return res.status(503).json({ message: "DB not ready" });
+    }
+
+    const categories = await booksCollection
+      .aggregate([
+        { $match: { category: { $exists: true, $ne: "" } } },
+        { $group: { _id: "$category", count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+        { $limit: 12 },
+        { $project: { _id: 0, name: "$_id", count: 1 } },
+      ])
+      .toArray();
+
+    res.json({ data: categories });
+  } catch (err) {
+    console.error("GET /api/public/categories error:", err);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+app.get("/api/public/about-stats", async (req, res) => {
+  try {
+    if (!booksCollection || !usersCollection || !ordersCollection) {
+      return res.status(503).json({ message: "DB not ready" });
+    }
+
+    const [totalBooks, totalUsers, totalOrders, deliveredOrders] =
+      await Promise.all([
+        booksCollection.countDocuments({}),
+        usersCollection.countDocuments({}),
+        ordersCollection.countDocuments({}),
+        ordersCollection.countDocuments({ orderStatus: "delivered" }), // ✅ FIX
+      ]);
+
+    const deliveryRate =
+      totalOrders > 0
+        ? Number(((deliveredOrders / totalOrders) * 100).toFixed(1))
+        : 0;
+
+    const topCategories = await booksCollection
+      .aggregate([
+        { $match: { category: { $exists: true, $ne: "" } } },
+        { $group: { _id: "$category", count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+        { $limit: 6 },
+        { $project: { _id: 0, name: "$_id", count: 1 } },
+      ])
+      .toArray();
+
+    res.json({
+      totalBooks,
+      totalUsers,
+      totalOrders,
+      deliveredOrders,
+      deliveryRate,
+      avgRating: 0,
+      topCategories,
+    });
+  } catch (err) {
+    console.error("GET /api/public/about-stats error:", err);
+    res.status(500).json({ message: "Internal server error" });
+  }
 });
 
 
