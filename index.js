@@ -60,7 +60,6 @@ const verifyFirebaseToken = async (req, res, next) => {
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.kpqz2hg.mongodb.net/?appName=Cluster0`;
 
-// Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(uri, {
   serverApi: {
     version: ServerApiVersion.v1,
@@ -75,6 +74,8 @@ let ordersCollection;
 let wishlistCollection;
 let reviewsCollection;
 let paymentsCollection;
+let contactCollection;
+let blogCollection;
 
 const verifyAdmin = async (req, res, next) => {
   try {
@@ -121,9 +122,15 @@ async function run() {
     wishlistCollection = db.collection('wishlist');
     reviewsCollection = db.collection('reviews');
     paymentsCollection = db.collection('payments');
+    contactCollection = db.collection('contacts');
+    blogCollection = db.collection("blogs");
 
      await usersCollection.createIndex({ email: 1 }, { unique: true });
     await wishlistCollection.createIndex({ email: 1, bookId: 1 }, { unique: true });
+
+    await blogCollection.createIndex({ slug: 1 }, { unique: true });
+await blogCollection.createIndex({ createdAt: -1 });
+await blogCollection.createIndex({ tags: 1 });
 
 
 //user api
@@ -476,7 +483,125 @@ app.get("/orders", verifyFirebaseToken, verifyAdmin, async (req, res) => {
   res.json(orders);
 });
 
+//Blogs api
+// app.get("/api/blog", async (req, res) => {
+//   const { search = "", tag = "", sort = "newest", page = 1, limit = 9 } = req.query;
 
+//   const pageNum = Math.max(1, Number(page));
+//   const limitNum = Math.max(1, Math.min(24, Number(limit)));
+//   const skip = (pageNum - 1) * limitNum;
+
+//   const query = {};
+//   if (search) {
+//     query.$or = [
+//       { title: { $regex: search, $options: "i" } },
+//       { excerpt: { $regex: search, $options: "i" } },
+//     ];
+//   }
+//   if (tag) query.tags = tag;
+
+//   let sortObj = { createdAt: -1 };
+//   if (sort === "oldest") sortObj = { createdAt: 1 };
+//   if (sort === "title_asc") sortObj = { title: 1 };
+//   if (sort === "title_desc") sortObj = { title: -1 };
+
+//   const [total, data] = await Promise.all([
+//     blogCollection.countDocuments(query),
+//     blogCollection.find(query).sort(sortObj).skip(skip).limit(limitNum).toArray(),
+//   ]);
+
+//   const pages = Math.ceil(total / limitNum);
+
+//   res.json({ data, pagination: { page: pageNum, limit: limitNum, total, pages } });
+// });
+
+// app.get("/api/blog/:slug", async (req, res) => {
+//   try {
+//     const { slug } = req.params;
+
+//     const post = await blogCollection.findOne({ slug });
+
+//     if (!post) {
+//       return res.status(404).json({ message: "Post not found" });
+//     }
+
+//     res.json({ data: post });
+//   } catch (err) {
+//     console.error("GET /api/blog/:slug error:", err);
+//     res.status(500).json({ message: "Internal server error" });
+//   }
+// });
+
+//aditional apis
+
+app.get("/api/public/categories", async (req, res) => {
+  const categories = await booksCollection.aggregate([
+    { $match: { category: { $exists: true, $ne: "" } } },
+    { $group: { _id: "$category", count: { $sum: 1 } } },
+    { $sort: { count: -1 } },
+    { $limit: 12 },
+    { $project: { _id: 0, name: "$_id", count: 1 } }
+  ]).toArray();
+
+  res.json({ data: categories });
+});
+
+app.get("/api/public/about-stats", async (req, res) => {
+  const [totalBooks, totalUsers, totalOrders, deliveredOrders] = await Promise.all([
+    booksCollection.countDocuments({}),
+    usersCollection.countDocuments({}),
+    ordersCollection.countDocuments({}),
+    ordersCollection.countDocuments({ status: "delivered" }),
+  ]);
+
+  const deliveryRate =
+    totalOrders > 0 ? Number(((deliveredOrders / totalOrders) * 100).toFixed(1)) : 0;
+
+  const topCategories = await booksCollection.aggregate([
+    { $match: { category: { $exists: true, $ne: "" } } },
+    { $group: { _id: "$category", count: { $sum: 1 } } },
+    { $sort: { count: -1 } },
+    { $limit: 6 },
+    { $project: { _id: 0, name: "$_id", count: 1 } }
+  ]).toArray();
+
+  const ratingAgg = await booksCollection.aggregate([
+    { $addFields: { r: { $ifNull: ["$rating", "$ratingAvg"] } } },
+    { $match: { r: { $type: "number" } } },
+    { $group: { _id: null, avgRating: { $avg: "$r" } } }
+  ]).toArray();
+
+  const avgRating = Number((ratingAgg?.[0]?.avgRating || 0).toFixed(2));
+
+  res.json({
+    totalBooks,
+    totalUsers,
+    totalOrders,
+    deliveredOrders,
+    deliveryRate,
+    avgRating,
+    topCategories,
+  });
+});
+
+
+app.post("/api/contact", async (req, res) => {
+  try {
+    const { name, email, subject, message } = req.body || {};
+
+    if (!name || !email || !subject || !message) {
+      return res.status(400).json({ message: "All fields are required" });
+    }
+
+    const doc = { name, email, subject, message, createdAt: new Date() };
+
+    const result = await contactCollection.insertOne(doc);
+    return res.status(201).json({ message: "Message sent successfully", id: result.insertedId });
+  } catch (err) {
+    console.error("POST /api/contact error:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
 
 // Add to wishlist
 app.post("/wishlist", verifyFirebaseToken, async (req, res) => {
@@ -589,6 +714,24 @@ app.post("/reviews", verifyFirebaseToken, async (req, res) => {
   }
 });
 
+
+// Get reviews for a book
+app.get("/reviews", async (req, res) => {
+  try {
+    const { bookId } = req.query;
+    if (!bookId) return res.status(400).json({ message: "bookId required" });
+
+    const reviews = await reviewsCollection
+      .find({ bookId: String(bookId) })
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    res.json({ success: true, reviews });
+  } catch (err) {
+    console.error("GET /reviews error:", err);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
 
 app.get("/reviews/eligibility/:bookId", verifyFirebaseToken, async (req, res) => {
   try {
@@ -729,8 +872,8 @@ app.get("/", (req, res) =>{
     res.send("BookCourier API Running")
 });
 
-// app.listen(PORT, () =>{
-//      console.log(`Server running on port ${PORT}`)
-//     });
+  app.listen(PORT, () =>{
+      console.log(`Server running on port ${PORT}`)
+   });
 
 module.exports = app;
