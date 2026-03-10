@@ -241,23 +241,59 @@ app.patch('/users/role/:id',verifyFirebaseToken, verifyAdmin, async (req, res) =
       res.json(result);
     });
 
-app.get('/books', async (req, res) => {
-  const { page = 1, limit = 20, search, sort } = req.query;
+app.get("/books", async (req, res) => {
+  try {
+    const {
+      page = 1,
+      limit = 20,
+      search = "",
+      sort = "",
+      category = "",
+      minPrice,
+      maxPrice,
+    } = req.query;
 
-  let query = {}; 
+    const query = {};
 
-  if (search) query.title = { $regex: search, $options: 'i' };
+    if (search) {
+      query.title = { $regex: search, $options: "i" };
+    }
 
-  let cursor = booksCollection.find(query);
+    if (category) {
+      query.category = category;
+    }
 
-  if (sort === 'asc') cursor.sort({ price: 1 });
-  if (sort === 'desc') cursor.sort({ price: -1 });
+    if (minPrice || maxPrice) {
+      query.price = {};
 
-  const skip = (parseInt(page) - 1) * parseInt(limit);
-  cursor = cursor.skip(skip).limit(parseInt(limit));
+      if (minPrice) {
+        query.price.$gte = Number(minPrice);
+      }
 
-  const books = await cursor.toArray();
-  res.json(books);
+      if (maxPrice) {
+        query.price.$lte = Number(maxPrice);
+      }
+    }
+
+    let cursor = booksCollection.find(query);
+
+    if (sort === "asc") {
+      cursor = cursor.sort({ price: 1 });
+    } else if (sort === "desc") {
+      cursor = cursor.sort({ price: -1 });
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const books = await cursor.skip(skip).limit(parseInt(limit)).toArray();
+
+    res.json(books);
+  } catch (error) {
+    res.status(500).json({
+      message: "Failed to fetch books",
+      error: error.message,
+    });
+  }
 });
 
 app.get("/books/:id", async (req, res) => {
