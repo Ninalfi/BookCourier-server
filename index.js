@@ -249,8 +249,7 @@ app.get("/books", async (req, res) => {
       search = "",
       sort = "",
       category = "",
-      minPrice,
-      maxPrice,
+      rating = "",
     } = req.query;
 
     const query = {};
@@ -263,16 +262,8 @@ app.get("/books", async (req, res) => {
       query.category = category;
     }
 
-    if (minPrice || maxPrice) {
-      query.price = {};
-
-      if (minPrice) {
-        query.price.$gte = Number(minPrice);
-      }
-
-      if (maxPrice) {
-        query.price.$lte = Number(maxPrice);
-      }
+    if (rating) {
+      query.rating = { $gte: Number(rating) };
     }
 
     let cursor = booksCollection.find(query);
